@@ -60,7 +60,7 @@ userSchema.pre("save", async function (next) {
 
     if (!this.isModified("password")) return next()
 
-    this.password = bcrypt.hash(this.password, 10)
+    this.password = await bcrypt.hash(this.password, 10)
     //The 10 is the salt rounds. how many rounds of encryption. we can set 3,4 etc.
     next()
 })

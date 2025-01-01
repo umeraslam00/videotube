@@ -1,6 +1,5 @@
 /*
-This code defines a higher-order function `asyncHandler` that takes a function `fn` as an argument. It returns a new function that wraps `fn` with error handling using Promises. If `fn` throws an error or returns a rejected Promise, it catches the error and passes it to the `next` function, typically used in Express.js middleware for error handling.
-*/
+This code defines a higher-order function `asyncHandler` that wraps a given function `fn` with error handling using Promises. It catches any errors thrown by `fn` and passes them to the `next` function, typically used in Express.js middleware for error handling.*/
 
 const asyncHandler = (fn) => {
     return (req, res, next) => {
