@@ -1,4 +1,4 @@
-import asyncHandler from "../utils/asyncHandler";
+import asyncHandler from "../utils/asyncHandler.js";
 import ApiError from "../utils/ApiError.js";
 import jwt from "jsonwebtoken";
 import {User} from "../models/user.model.js";
@@ -16,9 +16,11 @@ export const verifyJWT = asyncHandler(async (req, res, next) => {
             throw new ApiError(401, "Unauthorized request.")
         }
     
-        //we decode the token by using jwt.verify. we improved jwt from jsonwebtoken library.
+        //we decode the token by using jwt.verify. we imported jwt from jsonwebtoken library.
         const decodedToken = await jwt.verify(token, process.env.ACCESS_TOKEN_SECRET)
-    
+
+        /*the refreshToken is excluded from the req.user object, it still exists in the database, but we don't send it back to the client. */
+        
         const user = await User.findById(decodedToken?._id).select("-password -refreshToken")
     
         if(!user) {

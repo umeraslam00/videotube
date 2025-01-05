@@ -4,23 +4,20 @@ import {User} from "../models/user.model.js";
 import uploadOnCloudinary from "../utils/cloudinary.js";
 import ApiResonse from "../utils/ApiResponse.js";
 import cookieParser from "cookie-parser"
+import jwt from "jsonwebtoken";
 
-const generateAccessAndRefreshToken = async(userID) => {
-    try{
-        const user = await User.findById(userID)
-        const accessToken = user.generateAccessToken()
-        const refreshToken = user.generateRefreshToken()
+const generateAccessAndRefreshToken = async (userID) => {
+    const user = await User.findById(userID)
+    const accessToken = user.generateAccessToken()
+    const refreshToken = user.generateRefreshToken()
 
-        user.refreshToken = refreshToken;
-        await user.save({validateBeforeSave: false})
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false })
 
-        return {accessToken, refreshToken}
+    return { accessToken, refreshToken }
 
-    } catch(error) {
-        throw new ApiError(500, error.message)
-    }
+} 
 
-}
 
 const registerUser = asyncHandler( async (req, res) => {
     
@@ -135,11 +132,18 @@ const loginUser = asyncHandler( async (req, res) => {
 
 
     //get user data
-    const {email, username, password} = req.body
+    const { email, username, password } = req.body
+
+    console.log('username:', username);
+    console.log('email:', email);
 
     //if users sends no email and no password, send error.
     if(!username && !email) {
         throw new ApiError(400, "username or email is required.")
+    }
+
+    if(!password) {
+        throw new ApiError(400, "password is required.")
     }
 
     //search for user in DB.
@@ -181,26 +185,96 @@ const loginUser = asyncHandler( async (req, res) => {
     .status(200)
     .cookie("accessToken", accessToken, options)
     .cookie("refreshToken", refreshToken, options)
-    .josn(new ApiResonse(200, "login successfull", loggedUser))
+    .json(new ApiResonse(200, "login successfull", loggedUser))
 
 })
 
 
-const logOutUser = asyncHandler( async (req, res) => {
+const logOutUser = asyncHandler(async (req, res) => {
 
-   await User.findByIdAndUpdate(req.user._id, {$set: {refreshToken: ""}}, {new: true})
+    await User.findByIdAndUpdate(req.user._id, { $set: { refreshToken: "" } }, { new: true })
+
+    /*
+        Middleware in Express can modify the req object, making data available to subsequent middleware or controllers.
+    
+        req.user is a common pattern for attaching the authenticated user's information for use in secured routes.
+    
+        so, req.user is made available to the logoutUser.
+    
+        so, verifyJWT from auth.middleware.js had req.user and it was a middleware. This means req.user is now also available to the logoutUser.
+    
+    */
+
+    const options = {
+        httpOnly: true,
+        secure: true
+    }
+
+    return res.status(200)
+        .clearCookie("accessToken", options)
+        .clearCookie("refreshToken", options)
+        .json(new ApiResonse(200, "logout successfull"))
 
 })
 
-const options = {
-    httpOnly: true,
-    secure: true
-}
+const refreshAccessToken = asyncHandler(async (req, res) => {
 
-return res.status(200)
-.clearCookie("accessToken", options)
-.clearCookie("refreshToken", options)
-.json(new ApiResonse(200, "logout successfull"))
+    // Step 1: Retrieve the refresh token from cookies or request body
+    const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken
+
+    if(!incomingRefreshToken) {
+        throw new ApiError(403, "Unauthorized request.")
+
+    }
+
+    /* Step 2: Validate and decode the token.
+
+      jwt.verify(token, secretOrPublicKey, [options, callback])
+
+      You may think about skipping directly to step 4. After all, we can compare the encoded token with the stored one (it is also encoded). It ensures:
+
+      *The token is authentic (signed by the server with the correct secret).
+      *The token is not tampered with .
+      *The token is not expired.
+
+      we can also extract _id after decoding the token. This helps us find the user's token in DB and then compare with the cookie token.
+    */
+
+    try {
+        const decodedToken = await jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET)
+    
+        // Step 3: Find the user using the decoded _id
+        const user = await User.findById(decodedToken?._id)
+    
+        if(!user) {
+            throw new ApiError(403, "Invalid refresh token.")
+        }
+    
+        // Step 4: Compare the incoming encoded token with the stored one
+        if(incomingRefreshToken != user?.refreshToken) {
+            throw new ApiError(401, "Refresh token is expired or used.")
+        }
+    
+        const {accessToken, newRefreshToken} = await generateAccessAndRefreshToken(user._id)
+    
+        const loggedUser =await User.findById(findUser._id).select("-password -refreshToken")
+    
+        const options = {
+            httpOnly: true,
+            secure: true
+        }
+    
+        return res
+        .status(200)
+        .cookie("accessToken", accessToken, options)
+        .cookie("refreshToken", newRefreshToken, options)
+        .josn(new ApiResonse(200, "Token refreshed successfully.", {accessToken, newRefreshToken}))
+    
+    } catch (error) {
+        throw new ApiError(403, error?.message || "invalid refresh token")
+    }
+
+})
 
 export default registerUser
-export { loginUser, logOutUser };
+export { loginUser, logOutUser, refreshAccessToken };
