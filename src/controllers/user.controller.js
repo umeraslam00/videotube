@@ -276,5 +276,122 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
 })
 
+const changePassword = asyncHandler( async(req, res) => {
+
+    //we get the old and new password values from user (front-end)
+    const {oldPassword, newPassword} = req.body
+
+    if(!oldPassword || !newPassword) {
+        throw new ApiError(400, "Both fields (old and new password) are required.")
+    }
+
+    //we will run the verifyJWT middleware before this controller. So, we have access to req.user.
+    const user = await User.findById(req.user?._id)
+
+    //We use the isPasswordCorrect method from user.model.
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
+
+    if(!isPasswordCorrect) {
+        throw new ApiError(401, "Old password is incorrect.")
+    }
+
+    //We set the new password for user.
+    user.password = newPassword
+
+    /*
+      We have userSchema.pre("save", async function (next) in user.model. This automatically hashes the password (if it is modified) before saving it via Bcrypt.
+    */
+
+    await user.save({ validateBeforeSave: false })
+
+    return res.status(200).json(new ApiResonse(200, "Password changed successfully.", {}))
+
+
+    
+
+
+})
+
+const getCurrentUser = asyncHandler( async(req, res) => {
+
+    /*We get the req.user from verifyJWT middleware. This is the logged in user. So, the req.user will already have all the details of the user. */
+
+    return res
+    .status(200)
+    .json(new ApiResonse(200, "Current user fetched successfully.", req.user))
+})
+
+const updateAccountDetails = asyncHandler( async(req, res) => {
+
+    const {fullname, email} = req.body
+
+    if(!fullname || !email) {
+        throw new ApiError(400, "All fields are required.")
+    }
+    
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        { $set: { fullname, email } },
+        //{$set: {fullname: fullname, email: email}} The above is shorthand for this code.
+        { new: true }
+    ).select("-password")
+
+    return res.status(200).json(new ApiResonse(200, "Account details updated successfully.", updatedUser))
+   
+})
+
+const updateUserAvatar = asyncHandler ( async(req, res) => {
+    
+    /*if there were more than 1 file, we would use req.files. We get req.files because Multer middleware will be used.*/
+    
+    const avatarLocalPath = req.file?.path
+
+    if(!avatarLocalPath) {
+        throw new ApiError(400, "Avatar is required.")
+    }
+
+    //Upload on Cloudinary
+    const newAvatar = await uploadOnCloudinary(avatarLocalPath)
+
+    if(!newAvatar.url) {
+        throw new ApiError(400, "Error uploading the avatar.")
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {$set: {avatar: newAvatar.url}},
+        {new: true}
+    ).select("-password")
+
+    return res.status(200).json(new ApiResonse(200, "Avatar updated successfully.", user))
+})
+
+const updateUsercoverImage = asyncHandler ( async(req, res) => {
+    
+    /*if there were more than 1 file, we would use req.files. We get req.files because Multer middleware will be used.*/
+    
+    const coverLocalPath = req.file?.path
+
+    if(!coverLocalPath) {
+        throw new ApiError(400, "cover file is required.")
+    }
+
+    //Upload on Cloudinary
+    const newCover = await uploadOnCloudinary(coverLocalPath)
+
+    if(!newCover.url) {
+        throw new ApiError(400, "Error uploading the cover.")
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {$set: {coverImage: newCover.url}},
+        {new: true}
+    ).select("-password")
+
+    return res.status(200).json(new ApiResonse(200, "Cover Image updated successfully.", user))
+})
+
+
 export default registerUser
-export { loginUser, logOutUser, refreshAccessToken };
+export { loginUser, logOutUser, refreshAccessToken, getCurrentUser, changePassword, updateAccountDetails, updateUserAvatar, updateUsercoverImage };
