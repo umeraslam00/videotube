@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'node:fs';
+import ApiError from './ApiError';
 
 
 // Configuration
@@ -27,4 +28,38 @@ const uploadOnCloudinary = async (localFilePath) => {
     
 };
 
+const deleteOnCloudinary = async (fileURL) => {
+    try {
+        if(!fileURL) {
+            throw new ApiError(400, "No file to delete")
+        }
+
+        //extract the public id from url.
+        /*
+          Public ID: myfolder/myfile
+          URL: https://res.cloudinary.com/demo/image/upload/v1596705027/myfolder/myfile.jpg
+          This means we need to delete all the extra stuff to get public id.
+        */
+
+        const publicID = fileURL.split("/").slice(-2).join("/").split(".")[0];
+
+        //Delete file using Cloudinary's destroy method.
+        //https://cloudinary.com/documentation/image_upload_api_reference#destroy_method
+
+        const response = await cloudinary.v2.uploader.destroy(publicID)
+
+        if (result.result === "ok") {
+            console.log(`Successfully deleted file: ${fileURL}`);
+            return true;
+        } else {
+            console.error(`Failed to delete file: ${fileURL}. Response:`, result);
+            return false;
+        }
+
+    } catch (error) {
+        console.log ("Deleting file on Cloudinary failed", error)
+    }
+}
+
+export {deleteOnCloudinary};
 export default uploadOnCloudinary;

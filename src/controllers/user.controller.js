@@ -5,6 +5,7 @@ import uploadOnCloudinary from "../utils/cloudinary.js";
 import ApiResonse from "../utils/ApiResponse.js";
 import cookieParser from "cookie-parser"
 import jwt from "jsonwebtoken";
+import { deleteOnCloudinary } from './cloudinary';
 
 const generateAccessAndRefreshToken = async (userID) => {
     const user = await User.findById(userID)
@@ -383,13 +384,25 @@ const updateUsercoverImage = asyncHandler ( async(req, res) => {
         throw new ApiError(400, "Error uploading the cover.")
     }
 
-    const user = await User.findByIdAndUpdate(
+    //save the old cloudinary url of coverimage. We will use it to delete the old cover from cloud.
+    const user = User.findById(req.user?._id)
+    if (!user) {
+        throw new ApiError(404, "User not found.");
+    }
+
+    const oldCoverImageUrl = user.coverImage;
+
+    const updatedUser = await User.findByIdAndUpdate(
         req.user?._id,
         {$set: {coverImage: newCover.url}},
         {new: true}
     ).select("-password")
 
-    return res.status(200).json(new ApiResonse(200, "Cover Image updated successfully.", user))
+
+    // Delete the old cover image from Cloudinary (if any)
+    await deleteOnCloudinary(oldCoverImageUrl);
+
+    return res.status(200).json(new ApiResonse(200, "Cover Image updated successfully.", updatedUser))
 })
 
 
