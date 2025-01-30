@@ -405,6 +405,133 @@ const updateUsercoverImage = asyncHandler ( async(req, res) => {
     return res.status(200).json(new ApiResonse(200, "Cover Image updated successfully.", updatedUser))
 })
 
+/*
+   How Data Moves Through the Pipelines in getUserChannelProfile.
+
+   1. The database starts with all users in the User collection. It filters out only the user whose username matches.
+
+   2. If username = "bob", the output after this step is:
+   [
+    { "_id": 102, "username": "bob" }
+   ]
+
+   3. Find Subscribers (Who Follows This User)
+   MongoDB looks inside the subscriptions collection. It finds documents where channel matches the _id of this user. It groups all these documents into an array called "subscribers".
+
+   4.  Find Subscriptions (Who This User Follows)
+   MongoDB again looks inside the subscriptions collection. This time, it finds all channels that this user (_id) has subscribed to. It groups these documents into an array called "subscribedTo".
+
+   5. MongoDB counts the number of elements in "subscribers" and "subscribedTo". It adds two new fields to store the counts.
+
+*/
+
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+
+    /*  
+        Whenever someone visits a youtube channel, they open the
+        link on their browser. So, we can get the username from the url.
+    */
+
+    const { username } = req.params;
+
+    //if no username, send an error. We also used trim to remove any extra space around username.
+    if (!username?.trim()) {
+        throw new ApiError(400, "Username is missing.")
+    }
+
+    /*
+      User.aggregate([ {}, {}, {},...])
+      we can write as many pipelines as we can.
+
+      localField (The key in the current collection)
+       This is the field in the main collection (User in our case) that we are matching.
+
+       foreignField (The key in the other collection)
+       This is the field in the related collection (subscriptions in our case) that should match localField.
+    */
+
+
+    const channel = await User.aggregate([
+        //pipeline 1: Finds the user whose username matches the requested one.
+        {
+            $match: { username: username?.toLowerCase() }
+        },
+
+        /*
+          Pipeline 2:
+          For example: channel name is Umer.
+          We find all the documents based on the channel field in the subscriptions collection.
+          So, if user a,b,c have subscribed to channel: Umer. This means we will find 3 documents.
+          This gives us the channel subscribers count.
+
+          It looks for subscription documents where this user (_id) is listed as a channel.
+        */
+        {
+            $lookup: {
+                from: "subscriptions", // Look inside the subscriptions collection. Our model is called Subscription but mongoDB lowercases it and adds an s at the end.
+                localField: "_id", // User's _id (Umer, Ali, etc.)
+                foreignField: "channel", // Look for this _id inside the "channel" field.
+                as: "subscribers" // Save the result in "subscribers"
+            }
+        },
+
+        /*
+            Pipeline 3:
+            To Whom a user is subscribed to. For example: All channels that Ali has subscribed to.
+            In this case, we find all documents based on the user id: Let's say the user is Ali.
+            So, we found 4 documents where Ali is the subscriber.
+            This is how many channels that the user Ali has subscribed.
+        */
+        {
+        $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber", // Look for this _id inside the "subscriber" field
+                as: "subscribedTo"
+        }
+        },
+
+        {
+            $addFields: {
+                subscriberCount: { $size: "$subscribers" },
+                channelsSubscribedToCount: { $size: "$subscribedTo" },
+
+                //we can show if the logged in user is subscribed to this channel or not.
+                isSubscribed: {
+                    $cond: {
+                        if: {$in: [req.user?._id, "$subscribers.subscriber"]}, // "$subscribers.subscriber" extracts only the "subscriber" field from each document inside the "subscribers" array.
+                        then: true,
+                        else: false
+                    }
+                }
+            }
+        },
+
+        {
+            //Project is like projection. We can use it to only give selected items that are needed. Anything that's needed is given 1 value. Anything not needed is 0.
+            $project: {
+                fullname: 1,
+                username: 1,
+                subscriberCount: 1,
+                channelsSubscribedToCount: 1,
+                avatar: 1,
+                coverImage: 1,
+                email: 1,
+                isSubscribed: 1
+            }
+        }
+    ])
+
+    if(!channel.length){
+        throw new ApiError(404, "Channel not found.")
+    }
+
+    return res
+    .status(200)
+    .json(new ApiResonse(200, "Channel profile fetched successfully.", channel))
+
+})
+
 
 export default registerUser
-export { loginUser, logOutUser, refreshAccessToken, getCurrentUser, changePassword, updateAccountDetails, updateUserAvatar, updateUsercoverImage };
+export { loginUser, logOutUser, refreshAccessToken, getCurrentUser, changePassword, updateAccountDetails, updateUserAvatar, updateUsercoverImage, getUserChannelProfile };
