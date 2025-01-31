@@ -6,6 +6,7 @@ import ApiResonse from "../utils/ApiResponse.js";
 import cookieParser from "cookie-parser"
 import jwt from "jsonwebtoken";
 import { deleteOnCloudinary } from './cloudinary';
+import mongoose from "mongoose";
 
 const generateAccessAndRefreshToken = async (userID) => {
     const user = await User.findById(userID)
@@ -532,6 +533,50 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
 
 })
 
+const getWatchHistory = asyncHandler(async(req, res) => {
+    const user = await User.aggregate([
+        {
+            $match: {_id: new mongoose.Types.ObjectId(req.user._id)}
+        },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "watchHistory",
+                foreignField: "_id",
+                as: "watchHistory",
+                pipeline: [
+                    {
+                      $lookup: {
+                        from: "users",
+                        localField: "owner",
+                        foreignField: "_id",
+                        as: "owner",
+                        pipeline: [
+                            {
+                                $project: {
+                                    fullname: 1,
+                                    username: 1,
+                                    avatar: 1
+                                }
+                            }
+                        ]
+                      }
+                    }, {
+                        $addFields: {
+                            $first: "$owner"
+                        }
+                    }
+                ]
+            }
+        }
+    ])
+
+    return res
+    .status(200)
+    .json(new ApiResonse(200, "Watch history fetched successfully.", user[0].watchHistory))
+
+})
+
 
 export default registerUser
-export { loginUser, logOutUser, refreshAccessToken, getCurrentUser, changePassword, updateAccountDetails, updateUserAvatar, updateUsercoverImage, getUserChannelProfile };
+export { loginUser, logOutUser, refreshAccessToken, getCurrentUser, changePassword, updateAccountDetails, updateUserAvatar, updateUsercoverImage, getUserChannelProfile, getWatchHistory };
