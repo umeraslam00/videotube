@@ -5,7 +5,7 @@ import uploadOnCloudinary from "../utils/cloudinary.js";
 import ApiResonse from "../utils/ApiResponse.js";
 import cookieParser from "cookie-parser"
 import jwt from "jsonwebtoken";
-import { deleteOnCloudinary } from './cloudinary';
+import { deleteOnCloudinary } from "../utils/cloudinary.js";
 import mongoose from "mongoose";
 
 const generateAccessAndRefreshToken = async (userID) => {
@@ -306,7 +306,7 @@ const changePassword = asyncHandler( async(req, res) => {
 
     await user.save({ validateBeforeSave: false })
 
-    return res.status(200).json(new ApiResonse(200, "Password changed successfully.", {}))
+    return res.status(200).json(new ApiResonse(200, "Password changed successfully."))
 
 
     
