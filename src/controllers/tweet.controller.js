@@ -1,4 +1,6 @@
+import mongoose, { isValidObjectId } from "mongoose";
 import { Tweet } from "../models/tweet.model.js";
+import { User } from "../models/user.model.js";
 import ApiError from "../utils/ApiError.js";
 import ApiResponse from "../utils/ApiResponse.js";
 import asyncHandler from "../utils/asyncHandler.js";
@@ -35,7 +37,76 @@ const createTweet = asyncHandler(async(req, res) => {
 
 })
 
-const getUserTweets = asyncHandler(async() => {})
+
+/////////////////Get Tweets/////////////////////
+/* 1. Tweets should be visible to everyone. So anyone visiting a profile should get tweets.
+   2. We get the user id from the url.
+*/
+const getUserTweets = asyncHandler(async (req, res) => {
+    const {userId} = req.params;
+
+    const user = await User.findOne({username: userId})
+
+    if(!user){
+        throw new ApiError(404, "User not found")
+    }
+
+    const getTweets = await Tweet.find({owner: user._id})
+
+    if(!getTweets){
+        throw new ApiError(404, "No tweets found")
+    }
+
+    return res.status(200).json(new ApiResponse(200, "User tweets", getTweets))
+
+    
+});
+
+const updateTweet = asyncHandler(async(req, res) => {
+    const {tweetId} = req.params;
+    const {content} = req.body;
+
+    if(!tweetId || !content){
+        throw new ApiError(400, "Tweet id and content are required")
+    }
+
+    if(!isValidObjectId(tweetId)){
+        throw new ApiError(400, "Invalid tweet id")
+    }
+
+    const findTweet = await Tweet.findOne({
+       _id: tweetId
+    })
+
+    if(!findTweet) {
+        throw new ApiError(404, "Tweet not found")
+    }
+
+    findTweet.content = content;
+
+    await findTweet.save();
+
+    return res.status(200).json(new ApiResponse(200, "Tweet updated", findTweet))
+})
+
+const deleteTweet = asyncHandler(async(req, res) => {
+    const {tweetId} = req.params;
+
+    if(!tweetId){
+        throw new ApiError(400, "Tweet id is required")
+    }
+
+    const findTweet = await Tweet.findByIdAndDelete({
+        _id: tweetId
+    })
+
+    return res.status(200).json(new ApiResponse(200, "Tweet deleted", findTweet))
 
 
-export { createTweet, getUserTweets}
+})
+
+
+
+
+
+export { createTweet, getUserTweets, updateTweet, deleteTweet}
