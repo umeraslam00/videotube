@@ -59,14 +59,17 @@ const getUserChannelSubscribers = asyncHandler(async (req, res) => {
         channel:umer | subscriber: Ali
         channel:umer | subscriber: John
         Total subs: 2 (Ali, John)
+        The one thing common on both cases is channel: umer. So, we can find subsribers using channel.
    */
-  
+
     const { channelId } = req.params
 
+    //error if no chnanel id is provided.
     if (!channelId) {
         throw new ApiError(400, "Channel ID is required")
     }
 
+    //error if channelid is not valid.
     if (!isValidObjectId(channelId)) {
         throw new ApiError(404, "Invalid channel ID")
     }
@@ -112,6 +115,48 @@ const getUserChannelSubscribers = asyncHandler(async (req, res) => {
 // controller to return channel list to which user has subscribed
 const getSubscribedChannels = asyncHandler(async (req, res) => {
     const { subscriberId } = req.params
+
+    if(!subscriberId){
+        throw new ApiError(400, "Subscriber ID is required")
+    }
+
+    if(!isValidObjectId(subscriberId)) {
+        throw new ApiError(400, "Invalid subscriber ID")
+    }
+
+    const userSubscriptions = await Subscription.aggregate([
+        {
+            $match: {
+                subscriber: new mongoose.Types.ObjectId(subscriberId)
+            }
+        },
+
+        {
+            $lookup: {
+                from: "users",
+                localField: "channel",
+                foreignField: "_id",
+                as: "channelDetails"
+            }
+        },
+
+        {
+            $unwind: "$channelDetails"
+        },
+
+        {
+            $project: {
+                _id: 0,
+                channelId: "$channelDetails._id",
+                username: "$channelDetails.username",
+                avatar: "$channelDetails.avatar"
+            }
+
+        }
+
+    ])
+
+    res.status(200).json(new ApiResponse(200, "List of subscribed channels", userSubscriptions))
 
 
 })
